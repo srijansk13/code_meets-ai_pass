@@ -82,3 +82,57 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: err.message || 'Server error.' }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const session = await verifyAdminSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized admin access.' }, { status: 401 });
+    }
+
+    // Extract participant ID from searchParams or JSON body fallback
+    const { searchParams } = new URL(req.url);
+    let id = searchParams.get('id')?.trim();
+
+    if (!id) {
+      try {
+        const body = await req.json();
+        if (body && typeof body.id === 'string') {
+          id = body.id.trim();
+        }
+      } catch (e) {
+        // Body parsing fallback
+      }
+    }
+
+    if (!id) {
+      return NextResponse.json({ error: 'Participant ID is required.' }, { status: 400 });
+    }
+
+    const db = getSupabaseAdmin();
+
+    // 1. Delete associated scan logs to prevent foreign key constraints
+    const { error: scanErr } = await db.from('scan_log').delete().eq('participant_id', id);
+    if (scanErr) {
+      console.warn('Scan log deletion warning (continuing):', scanErr);
+    }
+
+    // 2. Delete participant record
+    const { error: deleteErr } = await db.from('participants').delete().eq('id', id);
+
+    if (deleteErr) {
+      console.error('Delete participant error:', deleteErr);
+      return NextResponse.json({ error: deleteErr.message || 'Failed to delete participant from database.' }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: 'Participant deleted successfully.',
+    });
+  } catch (err: any) {
+    console.error('Participants DELETE API internal error:', err);
+    return NextResponse.json({ error: err.message || 'Internal server error during deletion.' }, { status: 500 });
+  }
+}
+
+

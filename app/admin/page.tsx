@@ -10,6 +10,7 @@ import {
   Camera,
   Users,
   Lock,
+  Unlock,
   AlertCircle,
   RefreshCw,
   History,
@@ -58,10 +59,15 @@ export default function AdminPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'checked_in' | 'pending'>('all');
   const [dashLoading, setDashLoading] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
   const [stats, setStats] = useState({ total_registered: 0, total_checked_in: 0 });
 
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Registration lock state (separate from gate/scanner lock)
+  const [registrationLocked, setRegistrationLocked] = useState<boolean>(false);
+  const [regLockLoading, setRegLockLoading] = useState<boolean>(false);
 
   const addToast = (type: 'success' | 'warning' | 'error' | 'info', message: string) => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -81,6 +87,7 @@ export default function AdminPage() {
       if (savedLabel) setDeviceLabel(savedLabel);
     }
     fetchParticipantsData();
+    fetchRegistrationSettings();
   }, []);
 
   // Supabase Realtime Subscription for Live Admin Roster
@@ -121,13 +128,54 @@ export default function AdminPage() {
         setIsAuthenticated(true);
         setParticipants(data.participants || []);
         setStats(data.stats || { total_registered: 0, total_checked_in: 0 });
-      } else {
-        setIsAuthenticated(false);
       }
     } catch (e) {
-      setIsAuthenticated(false);
+      console.error('Failed to refresh roster:', e);
     } finally {
       setDashLoading(false);
+    }
+  };
+
+  const fetchRegistrationSettings = async () => {
+    try {
+      const res = await fetch('/api/admin/settings');
+      if (res.status === 401) return;
+      if (!res.ok) return;
+      const data = await res.json();
+      if (typeof data.registration_locked === 'boolean') {
+        setRegistrationLocked(data.registration_locked);
+      }
+    } catch (e) {
+      console.error('Failed to fetch registration settings:', e);
+    }
+  };
+
+  const handleToggleRegistrationLock = async () => {
+    setRegLockLoading(true);
+    const nextLocked = !registrationLocked;
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ registration_locked: nextLocked }),
+      });
+      const data = await res.json();
+      if (res.status === 401) {
+        setIsAuthenticated(false);
+        return;
+      }
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to update registration lock.');
+      }
+      setRegistrationLocked(data.registration_locked);
+      addToast(
+        'success',
+        data.registration_locked ? '🔒 Registrations LOCKED' : '🔓 Registrations OPEN'
+      );
+    } catch (err: any) {
+      addToast('error', 'Settings update failed: ' + err.message);
+    } finally {
+      setRegLockLoading(false);
     }
   };
 
@@ -155,6 +203,7 @@ export default function AdminPage() {
       setIsAuthenticated(true);
       addToast('success', 'GATE UNLOCKED 🚀');
       fetchParticipantsData();
+      fetchRegistrationSettings();
     } catch (err: any) {
       setAuthError(err.message || 'Authentication failed');
       addToast('error', err.message || 'Access Denied 💀');
@@ -392,32 +441,62 @@ export default function AdminPage() {
     isProcessingRef.current = false;
   };
 
-  const handleManualCheckin = async (participant: Participant) => {
-    if (participant.is_checked_in) return;
+  const handleToggleCheckin = async (participant: Participant) => {
     setActionLoadingId(participant.id);
 
     try {
+      const isUncheckin = participant.is_checked_in;
       const res = await fetch('/api/admin/checkin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          participant_id: participant.id,
           qr_token: participant.qr_token,
-          device_label: `${deviceLabel} (Manual)`,
+          action: isUncheckin ? 'uncheckin' : 'checkin',
+          device_label: `${deviceLabel} (${isUncheckin ? 'Manual Reset' : 'Manual'})`,
         }),
       });
 
       const data = await res.json();
-      setScanResult({
-        status: data.status,
-        participant: data.participant || participant,
-        message: data.message,
-      });
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update check-in status');
+      }
 
+      addToast('success', data.message || (isUncheckin ? 'Marked as UNPRESENT 🔄' : 'Marked as PRESENT 🚀'));
       fetchParticipantsData();
     } catch (err: any) {
-      addToast('error', 'Manual check-in failed: ' + err.message);
+      addToast('error', 'Status update failed: ' + err.message);
     } finally {
       setActionLoadingId(null);
+    }
+  };
+
+  const handleDeleteParticipant = async (participant: Participant) => {
+    const confirmDelete = window.confirm(
+      `Are you sure you want to delete ${participant.full_name} (${participant.roll_number})? This action cannot be undone.`
+    );
+    if (!confirmDelete) return;
+
+    setDeleteLoadingId(participant.id);
+
+    try {
+      const res = await fetch(`/api/admin/participants?id=${encodeURIComponent(participant.id)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: participant.id }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to delete participant.');
+      }
+
+      addToast('success', `Deleted ${participant.full_name} from database.`);
+      fetchParticipantsData();
+    } catch (err: any) {
+      addToast('error', 'Delete failed: ' + err.message);
+    } finally {
+      setDeleteLoadingId(null);
     }
   };
 
@@ -612,18 +691,63 @@ export default function AdminPage() {
 
       {/* ROSTER TAB */}
       {activeTab === 'dashboard' && (
-        <RosterTable
-          participants={participants}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          filterStatus={filterStatus}
-          setFilterStatus={setFilterStatus}
-          stats={stats}
-          loading={dashLoading}
-          onManualCheckin={handleManualCheckin}
-          actionLoadingId={actionLoadingId}
-          onExportCSV={handleExportCSV}
-        />
+        <div className="space-y-5">
+
+          {/* REGISTRATION CONTROL — completely separate from gate/scanner lock */}
+          <div className="bg-[#091228]/95 border border-white/10 rounded-2xl p-4 shadow-xl">
+            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+              REGISTRATION CONTROL
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${registrationLocked ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {registrationLocked ? (
+                    <><Lock className="w-3.5 h-3.5" /> REGISTRATIONS LOCKED</>
+                  ) : (
+                    <><Unlock className="w-3.5 h-3.5" /> REGISTRATIONS OPEN</>
+                  )}
+                </div>
+                <div className="text-[11px] text-slate-500 mt-0.5">
+                  {registrationLocked
+                    ? 'New entry passes cannot be created. Existing passes are unaffected.'
+                    : 'Participants can currently generate new entry passes.'}
+                </div>
+              </div>
+              <button
+                onClick={handleToggleRegistrationLock}
+                disabled={regLockLoading}
+                className={`shrink-0 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer border ${
+                  registrationLocked
+                    ? 'bg-emerald-950/80 hover:bg-emerald-900 border-emerald-500/50 text-emerald-300'
+                    : 'bg-red-950/80 hover:bg-red-900 border-red-500/50 text-red-300'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                {regLockLoading ? (
+                  <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                ) : registrationLocked ? (
+                  <><Unlock className="w-3.5 h-3.5" /><span>UNLOCK</span></>
+                ) : (
+                  <><Lock className="w-3.5 h-3.5" /><span>LOCK</span></>
+                )}
+              </button>
+            </div>
+          </div>
+
+          <RosterTable
+            participants={participants}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            filterStatus={filterStatus}
+            setFilterStatus={setFilterStatus}
+            stats={stats}
+            loading={dashLoading}
+            onToggleCheckin={handleToggleCheckin}
+            onDeleteParticipant={handleDeleteParticipant}
+            actionLoadingId={actionLoadingId}
+            deleteLoadingId={deleteLoadingId}
+            onExportCSV={handleExportCSV}
+          />
+        </div>
       )}
     </main>
   );

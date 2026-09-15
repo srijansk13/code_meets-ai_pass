@@ -13,6 +13,26 @@ function generateSecureBackupCode(): string {
 
 export async function POST(req: NextRequest) {
   try {
+    // 0. Check registration lock FIRST — before any other processing
+    try {
+      const { supabase: anonClient } = await import('@/lib/supabase');
+      const { data: settings } = await anonClient
+        .from('event_settings')
+        .select('registration_locked')
+        .eq('id', 1)
+        .maybeSingle();
+
+      if (settings?.registration_locked === true) {
+        return NextResponse.json(
+          { error: 'Registrations are currently closed.' },
+          { status: 403 }
+        );
+      }
+    } catch {
+      // If event_settings table is missing (migration not applied yet),
+      // treat as open and proceed with registration normally.
+    }
+
     const body = await req.json();
 
     // 1. Server-side validation of all mandatory participant fields & roll/year sync

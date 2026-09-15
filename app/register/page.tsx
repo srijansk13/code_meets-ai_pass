@@ -11,7 +11,7 @@ import StepContact from '@/components/registration/StepContact';
 import StepConfirm from '@/components/registration/StepConfirm';
 import Toast, { ToastMessage } from '@/components/Toast';
 import { validateParticipantData, deriveYearFromRollNumber } from '@/lib/validation';
-import { Ticket, ArrowRight } from 'lucide-react';
+import { Ticket, ArrowRight, Lock } from 'lucide-react';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -28,7 +28,10 @@ export default function RegisterPage() {
   const [phoneNumber, setPhoneNumber] = useState('');
 
   const [loading, setLoading] = useState(false);
-  const [existingToken, setExistingToken] = useState<string | null>(null);
+
+  // Registration lock state
+  const [registrationLocked, setRegistrationLocked] = useState<boolean>(false);
+  const [statusChecked, setStatusChecked] = useState<boolean>(false);
 
   // Toast notifications
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -53,15 +56,33 @@ export default function RegisterPage() {
     }
   }, [rollNumber]);
 
+  // Fetch registration lock status
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedToken = localStorage.getItem('chaos_qr_token');
-      if (savedToken) setExistingToken(savedToken);
-    }
+    if (typeof window === 'undefined') return;
+
+    const fetchRegStatus = async () => {
+      try {
+        const res = await fetch('/api/registration/status', { cache: 'no-store' });
+        const data = await res.json();
+        setRegistrationLocked(data.registration_locked === true);
+      } catch {
+        setRegistrationLocked(false);
+      } finally {
+        setStatusChecked(true);
+      }
+    };
+
+    fetchRegStatus();
   }, []);
 
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Guard: double-check lock client-side (server will enforce too)
+    if (registrationLocked) {
+      addToast('error', 'Registrations are currently closed.');
+      return;
+    }
 
     // Client-side full validation before submitting
     const validation = validateParticipantData({
@@ -108,13 +129,30 @@ export default function RegisterPage() {
 
       const data = await res.json();
 
+      // Handle registration lock rejection from server
+      if (res.status === 403) {
+        addToast('error', data.error || 'Registrations are currently closed.');
+        setRegistrationLocked(true);
+        setLoading(false);
+        return;
+      }
+
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Registration failed. Try again!');
       }
 
       const token = data.participant.qr_token;
       if (typeof window !== 'undefined') {
-        localStorage.setItem('chaos_qr_token', token);
+        let existing = [];
+        try {
+          existing = JSON.parse(localStorage.getItem('chaos_qr_tokens') || '[]');
+        } catch {
+          existing = [];
+        }
+        if (!existing.includes(token)) {
+          existing.push(token);
+          localStorage.setItem('chaos_qr_tokens', JSON.stringify(existing));
+        }
       }
 
       if (data.already_registered) {
@@ -154,31 +192,19 @@ export default function RegisterPage() {
 
       <main className="w-full max-w-xl mx-auto px-4 py-8 sm:py-12 flex flex-col items-center relative z-20 pointer-events-auto">
         
-        {/* Active Pass Recover Banner */}
-        {existingToken && (
-          <div className="w-full bg-[#091228]/90 border border-cyan-500/40 rounded-2xl p-4 mb-6 text-center shadow-xl relative z-20 pointer-events-auto">
-            <div className="flex items-center justify-between border-b border-white/10 pb-2 mb-3">
-              <span className="text-[10px] font-bold text-cyan-400 flex items-center gap-1.5 uppercase tracking-wider">
-                <Ticket className="w-4 h-4 text-cyan-400" />
-                <span>ACTIVE PASS DETECTED</span>
-              </span>
-              <span className="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 rounded-full font-bold">
-                ● READY FOR GATE
-              </span>
+
+
+        {/* Registration Locked Banner */}
+        {statusChecked && registrationLocked && (
+          <div className="w-full bg-[#1a0505]/90 border border-red-500/50 rounded-2xl p-5 mb-6 text-center shadow-xl">
+            <div className="flex items-center justify-center gap-2 text-red-400 font-extrabold text-sm uppercase tracking-wider mb-2">
+              <Lock className="w-5 h-5" />
+              <span>REGISTRATIONS LOCKED</span>
             </div>
-
-            <p className="text-xs text-slate-300 mb-3">
-              You already have an entry pass on this device! Tap below to view it.
+            <p className="text-xs text-slate-400">
+              Entry pass generation is currently closed by the event organiser.
+              If you already have a pass, it remains fully valid.
             </p>
-
-            <button
-              onClick={() => router.push(`/ticket/${existingToken}`)}
-              className="w-full py-3 bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-black font-extrabold text-xs rounded-xl uppercase tracking-wider transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-cyan-500/20 relative z-30 pointer-events-auto"
-            >
-              <Ticket className="w-4 h-4" />
-              <span>VIEW MY DIGITAL ENTRY PASS 🎟️</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
           </div>
         )}
 
@@ -229,7 +255,7 @@ export default function RegisterPage() {
               branch={branch}
               year={year}
               phoneNumber={phoneNumber}
-              loading={loading}
+              loading={loading || registrationLocked}
               onSubmit={handleFinalSubmit}
               onBack={() => setCurrentStep(3)}
             />

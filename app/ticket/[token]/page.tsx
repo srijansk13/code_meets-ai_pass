@@ -67,7 +67,16 @@ export default function TicketPage({ params }: { params: Promise<{ token: string
     if (!token) return;
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem('chaos_qr_token', token);
+      let existing = [];
+      try {
+        existing = JSON.parse(localStorage.getItem('chaos_qr_tokens') || '[]');
+      } catch {
+        existing = [];
+      }
+      if (!existing.includes(token)) {
+        existing.push(token);
+        localStorage.setItem('chaos_qr_tokens', JSON.stringify(existing));
+      }
     }
 
     const fetchParticipant = async () => {

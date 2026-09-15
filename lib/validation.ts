@@ -30,8 +30,8 @@ export interface ValidationResult {
 /**
  * Derives academic year from roll number prefix.
  * Rules:
- * - 25 -> 1st Year
- * - 26 -> 2nd Year
+ * - 25 -> 2nd Year
+ * - 26 -> 1st Year
  * - Roll number must be exactly 10 characters
  * - Any other prefix -> invalid
  */
@@ -69,7 +69,7 @@ export function deriveYearFromRollNumber(rollNumber: string): {
     };
   }
 
-  const year: AcademicYear = prefix === '25' ? '1st Year' : '2nd Year';
+  const year: AcademicYear = prefix === '25' ? '2nd Year' : '1st Year';
   return { isValid: true, year };
 }
 

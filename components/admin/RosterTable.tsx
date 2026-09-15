@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Search, Download, CheckCircle2 } from 'lucide-react';
+import { Search, Download, CheckCircle2, Trash2 } from 'lucide-react';
 
 export interface Participant {
   id: string;
@@ -25,8 +25,10 @@ interface RosterTableProps {
   setFilterStatus: (status: 'all' | 'checked_in' | 'pending') => void;
   stats: { total_registered: number; total_checked_in: number };
   loading: boolean;
-  onManualCheckin: (participant: Participant) => void;
+  onToggleCheckin: (participant: Participant) => void;
+  onDeleteParticipant: (participant: Participant) => void;
   actionLoadingId: string | null;
+  deleteLoadingId: string | null;
   onExportCSV: () => void;
 }
 
@@ -38,8 +40,10 @@ export default function RosterTable({
   setFilterStatus,
   stats,
   loading,
-  onManualCheckin,
+  onToggleCheckin,
+  onDeleteParticipant,
   actionLoadingId,
+  deleteLoadingId,
   onExportCSV,
 }: RosterTableProps) {
   const filtered = participants.filter((p) => {
@@ -143,21 +147,41 @@ export default function RosterTable({
                 </div>
               </div>
 
-              <div className="shrink-0">
+              <div className="shrink-0 flex items-center gap-2">
                 {p.is_checked_in ? (
-                  <span className="px-2.5 py-1 bg-emerald-950 border border-emerald-500/60 text-emerald-400 text-[10px] font-bold rounded-lg flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>PRESENT</span>
-                  </span>
+                  <>
+                    <span className="px-2.5 py-1.5 bg-emerald-950 border border-emerald-500/60 text-emerald-400 text-[10px] font-bold rounded-lg flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>PRESENT</span>
+                    </span>
+
+                    <button
+                      onClick={() => onToggleCheckin(p)}
+                      disabled={actionLoadingId === p.id}
+                      className="px-2.5 py-1.5 bg-amber-950/80 hover:bg-amber-900 border border-amber-500/50 text-amber-300 text-[10px] font-bold rounded-lg transition-all cursor-pointer disabled:opacity-50"
+                      title="Mark participant as unpresent"
+                    >
+                      {actionLoadingId === p.id ? 'RESETTING...' : 'UNPRESENT'}
+                    </button>
+                  </>
                 ) : (
                   <button
-                    onClick={() => onManualCheckin(p)}
+                    onClick={() => onToggleCheckin(p)}
                     disabled={actionLoadingId === p.id}
                     className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-[10px] rounded-lg uppercase cursor-pointer disabled:opacity-50"
                   >
                     {actionLoadingId === p.id ? 'MARKING...' : 'MARK PRESENT'}
                   </button>
                 )}
+
+                <button
+                  onClick={() => onDeleteParticipant(p)}
+                  disabled={deleteLoadingId === p.id}
+                  className="p-2 bg-red-950/70 hover:bg-red-900 border border-red-500/50 text-red-400 hover:text-red-200 text-[10px] font-bold rounded-lg transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center"
+                  title="Delete participant from database"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           ))
@@ -166,3 +190,4 @@ export default function RosterTable({
     </div>
   );
 }
+
