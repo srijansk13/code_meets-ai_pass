@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
-import { Phone, ShieldCheck, ArrowRight, ArrowLeft } from 'lucide-react';
+import React, { useState } from 'react';
+import { Phone, ShieldCheck, ArrowRight, ArrowLeft, AlertCircle } from 'lucide-react';
 import { maskPhoneNumber } from '@/lib/eventConfig';
 
 interface StepContactProps {
@@ -9,6 +9,7 @@ interface StepContactProps {
   setPhoneNumber: (val: string) => void;
   onNext: () => void;
   onBack: () => void;
+  onErrorToast?: (msg: string) => void;
 }
 
 export default function StepContact({
@@ -16,15 +17,33 @@ export default function StepContact({
   setPhoneNumber,
   onNext,
   onBack,
+  onErrorToast,
 }: StepContactProps) {
-  const cleanPhone = phoneNumber.replace(/\D/g, '');
-  const isValid = cleanPhone.length === 10;
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+
+  const cleanPhone = phoneNumber.toString().trim().replace(/\D/g, '');
+
+  const validateAndProceed = () => {
+    const rawTrimmed = phoneNumber.toString().trim();
+    if (!rawTrimmed) {
+      setPhoneError('Phone number is required');
+      if (onErrorToast) onErrorToast('Phone number is required');
+      return;
+    }
+
+    if (cleanPhone.length !== 10) {
+      setPhoneError('Please enter a valid 10-digit phone number');
+      if (onErrorToast) onErrorToast('Please enter a valid 10-digit phone number');
+      return;
+    }
+
+    setPhoneError(null);
+    onNext();
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isValid) {
-      onNext();
-    }
+    validateAndProceed();
   };
 
   return (
@@ -47,13 +66,23 @@ export default function StepContact({
 
           <input
             type="tel"
-            required
             maxLength={10}
             value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
+            onChange={(e) => {
+              setPhoneNumber(e.target.value);
+              if (phoneError) setPhoneError(null);
+            }}
             placeholder="[ e.g. 9876543210 ]"
-            className="w-full bg-[#040711] border border-slate-800 focus:border-cyan-400 rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 text-sm transition-all touch-manipulation"
+            className={`w-full bg-[#040711] border ${
+              phoneError ? 'border-red-500/80 focus:border-red-400 focus:ring-red-400/50' : 'border-slate-800 focus:border-cyan-400 focus:ring-cyan-400/50'
+            } rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:ring-1 text-sm transition-all touch-manipulation`}
           />
+          {phoneError && (
+            <p className="text-xs text-red-400 font-semibold mt-1.5 flex items-center gap-1">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-400" />
+              <span>{phoneError}</span>
+            </p>
+          )}
         </div>
 
         {/* Live Privacy Masking Preview Pill */}
@@ -84,11 +113,7 @@ export default function StepContact({
 
         <button
           type="submit"
-          onClick={() => {
-            if (isValid) onNext();
-          }}
-          disabled={!isValid}
-          className="py-3.5 px-4 bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-extrabold text-xs sm:text-sm rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-500/20 active:scale-98 transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation relative z-30 pointer-events-auto"
+          className="py-3.5 px-4 bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-black font-extrabold text-xs sm:text-sm rounded-xl uppercase tracking-wider shadow-lg shadow-emerald-500/20 active:scale-98 transition-all flex items-center justify-center gap-1.5 cursor-pointer touch-manipulation relative z-30 pointer-events-auto"
         >
           <span>REVIEW PASS</span>
           <ArrowRight className="w-4 h-4" />

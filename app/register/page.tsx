@@ -10,6 +10,7 @@ import StepAcademic from '@/components/registration/StepAcademic';
 import StepContact from '@/components/registration/StepContact';
 import StepConfirm from '@/components/registration/StepConfirm';
 import Toast, { ToastMessage } from '@/components/Toast';
+import { validateParticipantData, deriveYearFromRollNumber } from '@/lib/validation';
 import { Ticket, ArrowRight } from 'lucide-react';
 
 export default function RegisterPage() {
@@ -22,7 +23,7 @@ export default function RegisterPage() {
   const [fullName, setFullName] = useState('');
   const [rollNumber, setRollNumber] = useState('');
   const [section, setSection] = useState('');
-  const [branch, setBranch] = useState('CSE');
+  const [branch, setBranch] = useState('');
   const [year, setYear] = useState<'1st Year' | '2nd Year'>('1st Year');
   const [phoneNumber, setPhoneNumber] = useState('');
 
@@ -44,6 +45,14 @@ export default function RegisterPage() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  // Automatically derive academic year when roll number prefix changes
+  useEffect(() => {
+    const rollRes = deriveYearFromRollNumber(rollNumber);
+    if (rollRes.isValid && rollRes.year) {
+      setYear(rollRes.year);
+    }
+  }, [rollNumber]);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedToken = localStorage.getItem('chaos_qr_token');
@@ -54,15 +63,36 @@ export default function RegisterPage() {
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const cleanPhone = phoneNumber.replace(/\D/g, '');
-    if (cleanPhone.length < 10) {
-      addToast('error', 'Please enter a valid 10-digit phone number 📱');
+    // Client-side full validation before submitting
+    const validation = validateParticipantData({
+      full_name: fullName,
+      roll_number: rollNumber,
+      section,
+      branch,
+      year,
+      phone_number: phoneNumber,
+    });
+
+    if (!validation.isValid) {
+      const errMsg = validation.error || 'Please fill in all mandatory fields correctly.';
+      addToast('error', errMsg);
+
+      // Jump back to relevant step if a field is invalid
+      if (validation.fieldErrors.full_name || validation.fieldErrors.roll_number) {
+        setCurrentStep(1);
+      } else if (validation.fieldErrors.branch || validation.fieldErrors.section || validation.fieldErrors.year) {
+        setCurrentStep(2);
+      } else if (validation.fieldErrors.phone_number) {
+        setCurrentStep(3);
+      }
       return;
     }
 
     setLoading(true);
 
     try {
+      const cleanPhone = phoneNumber.toString().trim().replace(/\D/g, '');
+
       const res = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -71,7 +101,7 @@ export default function RegisterPage() {
           roll_number: rollNumber.trim(),
           section: section.trim(),
           branch: branch.trim().toUpperCase(),
-          year: year,
+          year: validation.derivedYear || year,
           phone_number: cleanPhone,
         }),
       });
@@ -93,15 +123,18 @@ export default function RegisterPage() {
         addToast('success', 'ENTRY PASS GENERATED ✓');
       }
 
-      // Fire celebratory confetti burst
+      // Fire celebratory confetti burst safely
       try {
-        const confetti = (await import('canvas-confetti')).default;
-        confetti({
-          particleCount: 100,
-          spread: 80,
-          origin: { y: 0.6 },
-          colors: ['#10b981', '#06b6d4', '#ffffff', '#f59e0b'],
-        });
+        const confettiModule = await import('canvas-confetti');
+        const confetti = confettiModule.default || confettiModule;
+        if (typeof confetti === 'function') {
+          confetti({
+            particleCount: 100,
+            spread: 80,
+            origin: { y: 0.6 },
+            colors: ['#10b981', '#06b6d4', '#ffffff', '#f59e0b'],
+          });
+        }
       } catch (e) {}
 
       setTimeout(() => {
@@ -161,6 +194,7 @@ export default function RegisterPage() {
               rollNumber={rollNumber}
               setRollNumber={setRollNumber}
               onNext={() => setCurrentStep(2)}
+              onErrorToast={(msg) => addToast('error', msg)}
             />
           )}
 
@@ -171,9 +205,9 @@ export default function RegisterPage() {
               branch={branch}
               setBranch={setBranch}
               year={year}
-              setYear={setYear}
               onNext={() => setCurrentStep(3)}
               onBack={() => setCurrentStep(1)}
+              onErrorToast={(msg) => addToast('error', msg)}
             />
           )}
 
@@ -183,6 +217,7 @@ export default function RegisterPage() {
               setPhoneNumber={setPhoneNumber}
               onNext={() => setCurrentStep(4)}
               onBack={() => setCurrentStep(2)}
+              onErrorToast={(msg) => addToast('error', msg)}
             />
           )}
 
