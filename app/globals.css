@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-main: #040711;
+    --bg-surface: #091228;
+    --bg-surface-elevated: #0e1b38;
+    --bg-card: rgba(14, 27, 56, 0.7);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-highlight: rgba(6, 182, 212, 0.3);
+    
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    
+    --accent-cyan: #06b6d4;
+    --accent-emerald: #10b981;
+    --accent-red: #ef4444;
+    --accent-amber: #f59e0b;
+
+    --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", monospace;
+  }
+
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    min-height: 100svh;
+    overflow-x: hidden;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Technical Grid Pattern Background */
+  .tech-grid-bg {
+    background-image: 
+      linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
+  /* Atmospheric Radial Lighting */
+  .ambient-glow-cyan {
+    background: radial-gradient(circle at 50% 0%, rgba(6, 182, 212, 0.15) 0%, transparent 65%);
+  }
+
+  .ambient-glow-emerald {
+    background: radial-gradient(circle at 100% 50%, rgba(16, 185, 129, 0.12) 0%, transparent 60%);
+  }
+
+  /* Atmospheric Glass Surfaces */
+  .surface-card {
+    background-color: rgba(9, 18, 40, 0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .surface-card-hover {
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .surface-card-hover:hover {
+    border-color: rgba(6, 182, 212, 0.4);
+    transform: translateY(-2px);
+  }
+}
+
+/* Animations */
+@keyframes pureIntroFade {
+  0% {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+  70% {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+  95% {
+    opacity: 0;
+    visibility: visible;
+    pointer-events: none;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-toast-slide {
+  animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #040711;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #06b6d4;
+}
