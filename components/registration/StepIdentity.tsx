@@ -11,6 +11,7 @@ interface StepIdentityProps {
   setRollNumber: (val: string) => void;
   onNext: () => void;
   onErrorToast?: (msg: string) => void;
+  externalRollError?: string | null;
 }
 
 export default function StepIdentity({
@@ -20,6 +21,7 @@ export default function StepIdentity({
   setRollNumber,
   onNext,
   onErrorToast,
+  externalRollError,
 }: StepIdentityProps) {
   const [nameError, setNameError] = useState<string | null>(null);
   const [rollError, setRollError] = useState<string | null>(null);
@@ -51,6 +53,11 @@ export default function StepIdentity({
       } else {
         setRollError(null);
       }
+    }
+
+    if (valid && externalRollError) {
+      if (onErrorToast) onErrorToast(externalRollError);
+      valid = false;
     }
 
     if (valid) {
@@ -119,13 +126,13 @@ export default function StepIdentity({
             }}
             placeholder="[ 10-character Roll Number ]"
             className={`w-full bg-[#040711] border ${
-              rollError ? 'border-red-500/80 focus:border-red-400 focus:ring-red-400/50' : 'border-slate-800 focus:border-cyan-400 focus:ring-cyan-400/50'
+              (rollError || externalRollError) ? 'border-red-500/80 focus:border-red-400 focus:ring-red-400/50' : 'border-slate-800 focus:border-cyan-400 focus:ring-cyan-400/50'
             } rounded-xl px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:ring-1 text-sm transition-all uppercase touch-manipulation`}
           />
-          {rollError && (
+          {(rollError || externalRollError) && (
             <p className="text-xs text-red-400 font-semibold mt-1.5 flex items-center gap-1">
               <AlertCircle className="w-3.5 h-3.5 shrink-0 text-red-400" />
-              <span>{rollError}</span>
+              <span>{rollError || externalRollError}</span>
             </p>
           )}
         </div>

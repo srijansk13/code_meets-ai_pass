@@ -56,6 +56,38 @@ export default function RegisterPage() {
     }
   }, [rollNumber]);
 
+  // Debounced check for existing roll number
+  const [rollNumberDbError, setRollNumberDbError] = useState<string | null>(null);
+  
+  useEffect(() => {
+    const roll = rollNumber.trim();
+    if (roll.length === 10 && deriveYearFromRollNumber(roll).isValid) {
+      const checkRoll = async () => {
+        try {
+          const { supabase } = await import('@/lib/supabase');
+          const { data } = await supabase
+            .from('participants')
+            .select('id')
+            .ilike('roll_number', roll)
+            .maybeSingle();
+
+          if (data) {
+            setRollNumberDbError(`Pass already generated for ${roll}`);
+          } else {
+            setRollNumberDbError(null);
+          }
+        } catch (err) {
+          // Ignore network errors here to avoid blocking
+        }
+      };
+      
+      const timer = setTimeout(checkRoll, 400);
+      return () => clearTimeout(timer);
+    } else {
+      setRollNumberDbError(null);
+    }
+  }, [rollNumber]);
+
   // Fetch registration lock status
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -221,6 +253,7 @@ export default function RegisterPage() {
               setRollNumber={setRollNumber}
               onNext={() => setCurrentStep(2)}
               onErrorToast={(msg) => addToast('error', msg)}
+              externalRollError={rollNumberDbError}
             />
           )}
 
