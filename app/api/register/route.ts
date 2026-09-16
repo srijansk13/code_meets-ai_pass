@@ -13,12 +13,19 @@ function generateSecureBackupCode(): string {
 
 export async function POST(req: NextRequest) {
   try {
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
     // 0. Check registration lock FIRST — before any other processing
     try {
       const { supabase: anonClient } = await import('@/lib/supabase');
       const { data: settings } = await anonClient
         .from('event_settings')
-        .select('registration_locked')
+        .select('registration_locked, first_year_locked')
         .eq('id', 1)
         .maybeSingle();
 
@@ -28,12 +35,19 @@ export async function POST(req: NextRequest) {
           { status: 403 }
         );
       }
+
+      const validation = validateParticipantData(body);
+
+      if (settings?.first_year_locked === true && validation.isValid && validation.derivedYear === '1st Year') {
+        return NextResponse.json(
+          { error: 'Registrations for 1st Year are currently full and closed.' },
+          { status: 403 }
+        );
+      }
     } catch {
       // If event_settings table is missing (migration not applied yet),
       // treat as open and proceed with registration normally.
     }
-
-    const body = await req.json();
 
     // 1. Server-side validation of all mandatory participant fields & roll/year sync
     const validation = validateParticipantData(body);

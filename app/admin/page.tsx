@@ -68,6 +68,8 @@ export default function AdminPage() {
   // Registration lock state (separate from gate/scanner lock)
   const [registrationLocked, setRegistrationLocked] = useState<boolean>(false);
   const [regLockLoading, setRegLockLoading] = useState<boolean>(false);
+  const [firstYearLocked, setFirstYearLocked] = useState<boolean>(false);
+  const [firstYearLockLoading, setFirstYearLockLoading] = useState<boolean>(false);
 
   const addToast = (type: 'success' | 'warning' | 'error' | 'info', message: string) => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -145,6 +147,9 @@ export default function AdminPage() {
       if (typeof data.registration_locked === 'boolean') {
         setRegistrationLocked(data.registration_locked);
       }
+      if (typeof data.first_year_locked === 'boolean') {
+        setFirstYearLocked(data.first_year_locked);
+      }
     } catch (e) {
       console.error('Failed to fetch registration settings:', e);
     }
@@ -176,6 +181,35 @@ export default function AdminPage() {
       addToast('error', 'Settings update failed: ' + err.message);
     } finally {
       setRegLockLoading(false);
+    }
+  };
+
+  const handleToggleFirstYearLock = async () => {
+    setFirstYearLockLoading(true);
+    const nextLocked = !firstYearLocked;
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ first_year_locked: nextLocked }),
+      });
+      const data = await res.json();
+      if (res.status === 401) {
+        setIsAuthenticated(false);
+        return;
+      }
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to update first year lock.');
+      }
+      setFirstYearLocked(data.first_year_locked);
+      addToast(
+        'success',
+        data.first_year_locked ? '🔒 1st Year Registrations LOCKED' : '🔓 1st Year Registrations OPEN'
+      );
+    } catch (err: any) {
+      addToast('error', 'Settings update failed: ' + err.message);
+    } finally {
+      setFirstYearLockLoading(false);
     }
   };
 
@@ -694,42 +728,85 @@ export default function AdminPage() {
         <div className="space-y-5">
 
           {/* REGISTRATION CONTROL — completely separate from gate/scanner lock */}
-          <div className="bg-[#091228]/95 border border-white/10 rounded-2xl p-4 shadow-xl">
-            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
-              REGISTRATION CONTROL
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${registrationLocked ? 'text-red-400' : 'text-emerald-400'}`}>
-                  {registrationLocked ? (
-                    <><Lock className="w-3.5 h-3.5" /> REGISTRATIONS LOCKED</>
-                  ) : (
-                    <><Unlock className="w-3.5 h-3.5" /> REGISTRATIONS OPEN</>
-                  )}
-                </div>
-                <div className="text-[11px] text-slate-500 mt-0.5">
-                  {registrationLocked
-                    ? 'New entry passes cannot be created. Existing passes are unaffected.'
-                    : 'Participants can currently generate new entry passes.'}
-                </div>
+          <div className="bg-[#091228]/95 border border-white/10 rounded-2xl p-4 shadow-xl flex flex-col gap-4">
+            <div>
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+                GLOBAL REGISTRATION CONTROL
               </div>
-              <button
-                onClick={handleToggleRegistrationLock}
-                disabled={regLockLoading}
-                className={`shrink-0 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer border ${
-                  registrationLocked
-                    ? 'bg-emerald-950/80 hover:bg-emerald-900 border-emerald-500/50 text-emerald-300'
-                    : 'bg-red-950/80 hover:bg-red-900 border-red-500/50 text-red-300'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-              >
-                {regLockLoading ? (
-                  <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                ) : registrationLocked ? (
-                  <><Unlock className="w-3.5 h-3.5" /><span>UNLOCK</span></>
-                ) : (
-                  <><Lock className="w-3.5 h-3.5" /><span>LOCK</span></>
-                )}
-              </button>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${registrationLocked ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {registrationLocked ? (
+                      <><Lock className="w-3.5 h-3.5" /> REGISTRATIONS LOCKED</>
+                    ) : (
+                      <><Unlock className="w-3.5 h-3.5" /> REGISTRATIONS OPEN</>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    {registrationLocked
+                      ? 'New entry passes cannot be created. Existing passes are unaffected.'
+                      : 'Participants can currently generate new entry passes.'}
+                  </div>
+                </div>
+                <button
+                  onClick={handleToggleRegistrationLock}
+                  disabled={regLockLoading}
+                  className={`shrink-0 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer border ${
+                    registrationLocked
+                      ? 'bg-emerald-950/80 hover:bg-emerald-900 border-emerald-500/50 text-emerald-300'
+                      : 'bg-red-950/80 hover:bg-red-900 border-red-500/50 text-red-300'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {regLockLoading ? (
+                    <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  ) : registrationLocked ? (
+                    <><Unlock className="w-3.5 h-3.5" /><span>UNLOCK</span></>
+                  ) : (
+                    <><Lock className="w-3.5 h-3.5" /><span>LOCK</span></>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <div className="w-full h-px bg-white/10"></div>
+
+            <div>
+              <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
+                1ST YEAR REGISTRATION CONTROL
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <div className={`text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 ${firstYearLocked ? 'text-red-400' : 'text-emerald-400'}`}>
+                    {firstYearLocked ? (
+                      <><Lock className="w-3.5 h-3.5" /> 1ST YEAR LOCKED</>
+                    ) : (
+                      <><Unlock className="w-3.5 h-3.5" /> 1ST YEAR OPEN</>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    {firstYearLocked
+                      ? '1st Year participants cannot generate passes.'
+                      : '1st Year participants can generate passes.'}
+                  </div>
+                </div>
+                <button
+                  onClick={handleToggleFirstYearLock}
+                  disabled={firstYearLockLoading || registrationLocked}
+                  className={`shrink-0 px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer border ${
+                    firstYearLocked
+                      ? 'bg-emerald-950/80 hover:bg-emerald-900 border-emerald-500/50 text-emerald-300'
+                      : 'bg-red-950/80 hover:bg-red-900 border-red-500/50 text-red-300'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {firstYearLockLoading ? (
+                    <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  ) : firstYearLocked ? (
+                    <><Unlock className="w-3.5 h-3.5" /><span>UNLOCK</span></>
+                  ) : (
+                    <><Lock className="w-3.5 h-3.5" /><span>LOCK</span></>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 

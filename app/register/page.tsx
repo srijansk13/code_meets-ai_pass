@@ -56,11 +56,38 @@ export default function RegisterPage() {
     }
   }, [rollNumber]);
 
+  // Fetch registration lock status
+  const [firstYearLocked, setFirstYearLocked] = useState<boolean>(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const fetchRegStatus = async () => {
+      try {
+        const res = await fetch('/api/registration/status', { cache: 'no-store' });
+        const data = await res.json();
+        setRegistrationLocked(data.registration_locked === true);
+        setFirstYearLocked(data.first_year_locked === true);
+      } catch {
+        setRegistrationLocked(false);
+        setFirstYearLocked(false);
+      } finally {
+        setStatusChecked(true);
+      }
+    };
+
+    fetchRegStatus();
+  }, []);
+
   // Debounced check for existing roll number
   const [rollNumberDbError, setRollNumberDbError] = useState<string | null>(null);
   
   useEffect(() => {
     const roll = rollNumber.trim();
+    if (roll.length > 0 && roll.startsWith('26') && firstYearLocked) {
+      setRollNumberDbError('First year pass generation is stopped.');
+      return;
+    }
+    
     if (roll.length === 10 && deriveYearFromRollNumber(roll).isValid) {
       const checkRoll = async () => {
         try {
@@ -86,26 +113,7 @@ export default function RegisterPage() {
     } else {
       setRollNumberDbError(null);
     }
-  }, [rollNumber]);
-
-  // Fetch registration lock status
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const fetchRegStatus = async () => {
-      try {
-        const res = await fetch('/api/registration/status', { cache: 'no-store' });
-        const data = await res.json();
-        setRegistrationLocked(data.registration_locked === true);
-      } catch {
-        setRegistrationLocked(false);
-      } finally {
-        setStatusChecked(true);
-      }
-    };
-
-    fetchRegStatus();
-  }, []);
+  }, [rollNumber, firstYearLocked]);
 
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
